@@ -1,25 +1,41 @@
-import { View, Text, Button, Image, TextInput, StyleSheet, TouchableOpacity } from "react-native";
-import { API_URL, useAuth, User } from "../context/AuthContext";
+import { View, Text, Button, Image, TextInput, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import {useAuth, User } from "../context/AuthContext";
 import { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker"
 import axios from "axios";
 import PhoneInputComponent from "../../components/PhoneInputComponent";
+import ColoredButton from "../../components/ColoredButton";
+import TextInputComponent from "../../components/TextInputComponent";
+import { NativeStackNavigationProp, NativeStackScreenProps } from "@react-navigation/native-stack";
+import { Pencil, Scroll } from "lucide-react-native";
+import { useNavigation } from "@react-navigation/native";
+import { useTheme } from "../context/ThemeContext";
+import * as Burnt from "burnt"
+import TopBar from "../../components/TopBar";
+import { API_URL } from "../../constants/ApiUri";
+import { RootStackParamList } from "../../constants/RootStackParams";
 
 export default function Profile() {
-    const { user, onUserUpdate } = useAuth()
-    const [email, setEmail] = useState<string | null>("")
-    const [password, setPassword] = useState<string | null>("")
-    const [phone, setPhone] = useState<string | null>("")
-    const [userName, setUserName] = useState<string | null>("")
-    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+    const { user, onGetUserData, onUserUpdate, onLogout } = useAuth()
+    const [email, setEmail] = useState<string | undefined>("")
+    const [password, setPassword] = useState<string | undefined>("")
+    const [phone, setPhone] = useState<string | undefined>("")
+    const [userName, setUserName] = useState<string | undefined>("")
+    const [selectedImage, setSelectedImage] = useState<string | undefined>("");
+    const { theme } = useTheme()
     useEffect(() => {
         if (user) {
             setEmail(user.email)
             setPhone(user.phone)
             setUserName(user.userName)
+
             setSelectedImage(user.pfp)
+            setPassword(user.password)
+
         }
     }, [user])
+
     const pickImageAsync = async () => {
         let result = await ImagePicker.launchImageLibraryAsync({
             allowsEditing: true,
@@ -28,6 +44,21 @@ export default function Profile() {
         })
         if (!result.canceled) {
             setSelectedImage(result.assets[0].uri);
+        }
+    }
+    const updateUser = async (user: User) => {
+        try {
+            const filteredData = Object.fromEntries(
+                Object.entries(user).filter(([_, value]) => value !== null && value !== undefined)
+            );
+            const response = await axios.put(`${API_URL}/edit-user`, filteredData, {
+                headers: {
+                    "Content-Type": "application/json",
+                }
+            })
+            return response.data
+        } catch (e) {
+            return { error: true, msg: (e as any).response?.data?.detail || "An error occurred" }
         }
     }
     const uploadPfp = async (formData: FormData) => {
@@ -40,6 +71,7 @@ export default function Profile() {
 
             return response.data;
         } catch (e) {
+            console.log("error")
             return {
                 error: true,
                 msg: (e as any).response?.data?.detail || "An error occurred"
@@ -47,60 +79,95 @@ export default function Profile() {
         }
     }
     const handleUpload = async () => {
-        if (!selectedImage) {
-            alert("Please select an image first")
-            return;
-        }
-        if (!user?.userId) {
-            alert("Unable to get user id")
-            return
-        }
+        if (user?.userId) {
+            let newUser: User = {
+                email: email,
+                password: password,
+                pfp: selectedImage,
+                phone: phone,
+                userId: user.userId,
+                userName: userName,
+                role: user.role
 
-        let filename = selectedImage.split("/").pop();
-        let match = /\.(\w+)$/.exec(filename || "");
-        let type = match ? `image/${match[1]}` : `image`;
+            }
+            const res = await updateUser(newUser)
+            if (res.error) {
+                console.log(res.msg, "asjdasd")
+            } else {
+                await onUserUpdate!(newUser)
+                if (selectedImage && user?.userId) {
+                    let filename = selectedImage.split("/").pop();
+                    let match = /\.(\w+)$/.exec(filename || "");
+                    let type = match ? `image/${match[1]}` : `image`;
+                    let formData = new FormData();
+                    formData.append("UserId", user.userId);
+                    formData.append("file", {
+                        uri: selectedImage,
+                        name: filename,
+                        type: type
+                    } as any);
+                    await uploadPfp(formData)
+                }
+                Burnt.toast({
+                    title: "Success",
+                    preset: "done",
+                    message: "Profile Successfully Updated"
 
-        let formData = new FormData();
-        formData.append("UserId", user.userId);
-        formData.append("file", {
-            uri: selectedImage,
-            name: filename,
-            type: type
-        } as any);
-
-        const response = await uploadPfp(formData)
-        let newUser: User = {
-            email: user.email,
-            pfp: selectedImage,
-            phone: user.phone,
-            rating: user.rating,
-            userId: user.userId,
-            userName: user.userName
+                })
+            }
         }
-        await onUserUpdate!(newUser)
-        console.log(response)
     }
     return (
         <View>
+            <TopBar title={"Profile"} showBackButton={false} />
             {user ?
-                <View style={styles.formContainer}>
-                    <Image source={selectedImage ? { uri: selectedImage } : require('../../assets/default.jpg')} style={styles.pfp} />
-                    <Button onPress={pickImageAsync} title="upload pfp" />
-                    <TextInput style={styles.textInput} autoCapitalize="none" placeholder="User Name" onChangeText={setUserName} />
-                    <TextInput style={styles.textInput} autoCapitalize="none" placeholder="Email" onChangeText={setEmail} />
-                    <TextInput style={styles.textInput} autoCapitalize="none" placeholder="Password" onChangeText={setPassword} secureTextEntry={true} />
-                    <PhoneInputComponent onPhoneChange={setPhone} defaultValue={user.phone ? user.phone : ""} />
-                    <Button title="save changes" onPress={() => handleUpload()} />
-                </View>
+                <ScrollView>
+                    <View style={styles.formContainer}>
+                        <TouchableOpacity onPress={pickImageAsync}>
+                            <Image
+                                source={selectedImage && selectedImage !== "" ? { uri: selectedImage } : require('../../assets/default.jpg')}
+                                style={styles.pfp}
+                            />
+                            <View style={styles.pencil}>
+                                <Pencil size={20} color={"white"} />
+                            </View>
+                        </TouchableOpacity>
+                        <Text style={{ color: theme == "dark" ? "white" : "black", fontWeight: "bold", textAlign: "left", width: "100%" }}>User Name</Text>
+                        <TextInputComponent autoCapitalize="none" placeholder="User Name" onChangeText={setUserName} value={userName} />
+                        <Text style={{ color: theme == "dark" ? "white" : "black", fontWeight: "bold", textAlign: "left", width: "100%" }}>Email</Text>
+                        <TextInputComponent autoCapitalize="none" placeholder="Email" onChangeText={setEmail} value={email} />
+                        <Text style={{ color: theme == "dark" ? "white" : "black", fontWeight: "bold", textAlign: "left", width: "100%" }}>Password</Text>
+                        <TextInputComponent autoCapitalize="none" placeholder="Password" onChangeText={setPassword} value={password} secureTextEntry={true} />
+                        <Text style={{ color: theme == "dark" ? "white" : "black", fontWeight: "bold", textAlign: "left", width: "100%" }}>Phone</Text>
+                        <PhoneInputComponent onPhoneChange={setPhone} defaultValue={user.phone ? user.phone : ""} />
+                        <ColoredButton title={"Save Changes"} style={{ backgroundColor: "#5CCFA3", width: "100%" }} onPress={handleUpload} />
+                        <ColoredButton title={"Log Out"} style={{ backgroundColor: "#F56565", width: "100%" }} onPress={() => onLogout!()} />
+                    </View>
+                </ScrollView>
+
                 : <></>}
         </View>
     )
 }
 const styles = StyleSheet.create({
+    pencil: {
+        backgroundColor: '#31363F',
+        width: 35,
+        height: 35,
+        borderRadius: 100,
+        position: 'absolute',
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+        right: 0,
+        top: 0
+    },
     formContainer: {
         padding: 10,
+        paddingTop:25,
         gap: 10,
-        alignItems: 'center'
+        alignItems: 'center',
+        width: "100%"
     },
     textInput: {
         width: "100%",

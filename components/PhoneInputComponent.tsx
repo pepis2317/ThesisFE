@@ -26,11 +26,10 @@ export default function PhoneInputComponent({ defaultValue, onPhoneChange }: { d
                 phoneInputStyles={{
                     container: {
                         backgroundColor: theme === "dark" ? undefined : 'white',
-                        borderWidth: theme ==="dark"?1:0,
-                        borderColor: theme === "dark" ?"#636C7C":undefined,
+                        borderWidth: 1,
+                        borderColor: theme === "dark" ?"#636C7C":"#D9D9D9",
                         borderRadius: 5,
-                        overflow:'hidden'
-                        
+                        overflow:'hidden',
                     },
                     flagContainer: {
                         backgroundColor: theme == "dark" ? '#3D4149' : '#E9E9E9',
@@ -39,7 +38,7 @@ export default function PhoneInputComponent({ defaultValue, onPhoneChange }: { d
                         justifyContent: 'center',
                     },
                     input:{
-                        color:'white'
+                        color:theme =="dark"?'white':'black'
                     }
                 }}
                 modalStyles={{
@@ -76,8 +75,5 @@ const styles = StyleSheet.create({
     lightText: {
         color: 'black'
     },
-    darkPhone: {
-
-    }
 
 })

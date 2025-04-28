@@ -3,27 +3,31 @@ import { createContext, useContext, useEffect, useState } from "react";
 import * as SecureStore from 'expo-secure-store'
 import { AppState } from "react-native";
 import { jwtDecode } from "jwt-decode";
+import { API_URL } from "../../constants/ApiUri";
 
 interface AuthProps {
     user?: User | null
     authState?: { token: string | null; refreshToken: string | null; authenticated: boolean | null; }
-    onRegister?: (username: string, email: string, password: string, phone: string) => Promise<any>
+    onRegister?: (username: string, email: string, password: string, phone: string, role:string) => Promise<any>
     onLogin?: (email: string, password: string) => Promise<any>
     onLogout?: () => Promise<any>
     onUserUpdate?:(user: User)=> Promise<any>
+    onGetUserData?: () => Promise<any>
 }
 export interface User {
-    email: string | null
-    pfp: string | null
-    phone: string | null
-    rating: number | null
-    userId: string | null
-    userName: string | null
+    email?: string
+    pfp?: string 
+    phone?: string
+    rating?: number
+    userId?: string
+    userName?: string
+    role?: string
+    password?:string
 }
 const TOKEN_KEY = "access_token"
 const REFRESH_TOKEN_KEY = "refresh_token"
 const USER_DATA_KEY = "user_data"
-export const API_URL = "http://192.168.1.3:5026/api/v1"
+
 const AuthContext = createContext<AuthProps>({})
 
 export const useAuth = () => {
@@ -42,13 +46,14 @@ export default function AuthProvider({ children }: any) {
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
     
-    const register = async (username: string, email: string, password: string, phone: string) => {
+    const register = async (username: string, email: string, password: string, phone: string, role:string) => {
         try {
             const response = await axios.post(`${API_URL}/register-user`, {
                 UserName: username,
                 Password: password,
                 Email: email,
-                Phone: phone
+                Phone: phone,
+                Role: role
             })
             return response.data
         } catch (e) {
@@ -59,6 +64,7 @@ export default function AuthProvider({ children }: any) {
         setUser(user)
         await SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(user))
     }
+    
     const login = async (email: string, password: string) => {
         try {
             const result = await axios.post(`${API_URL}/user-login`, null, {
@@ -73,6 +79,7 @@ export default function AuthProvider({ children }: any) {
             await SecureStore.setItemAsync(TOKEN_KEY, token)
             await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken)
             const user = await getUserData()
+            user.password = password
             await SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(user))
             setAuthState({
                 token,
@@ -201,6 +208,7 @@ export default function AuthProvider({ children }: any) {
         onLogin: login,
         onLogout: logout,
         onUserUpdate: updateUser,
+        onGetUserData:getUserData,
         authState,
         user,
         loading
